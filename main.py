@@ -21,7 +21,7 @@
 
 # CONTINUE: do the calculation tool and export
 
-from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QGraphicsTextItem
+from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QGraphicsTextItem, QHBoxLayout
 from PyQt6.QtWidgets import QApplication, QGraphicsView, QGraphicsScene, QMainWindow, QPushButton, QVBoxLayout, QWidget, QFileDialog, QGraphicsEllipseItem, QGraphicsLineItem, QComboBox, QInputDialog, QGraphicsPolygonItem
 from PyQt6.QtGui import QPixmap, QPen, QColor, QBrush, QCursor, QPolygonF, QFont, QTransform
 from PyQt6.QtCore import Qt, QRectF, QPointF, QLineF, pyqtSignal, QObject
@@ -84,6 +84,10 @@ class MainWindow(QMainWindow):
         self.resize(800, 600)
         self.viewer = ImageViewer()
         self.loadBtn = QPushButton('Load Image')
+        self.facility_id_input = QLineEdit()
+        self.facility_id_input.setPlaceholderText("Facility ID")
+        self.exportBtn = QPushButton('Export')
+
         # Participant stuff
         self.createParticipantBtn = QPushButton('Create Participant')
         self.participantSelector = QComboBox()
@@ -122,17 +126,53 @@ class MainWindow(QMainWindow):
         self.scaleTool.signalEmitter.signal.connect(self.handle_scale_set)
 
         # Set up UI
-        layout = QVBoxLayout()
-        layout.addWidget(self.loadBtn)
-        layout.addWidget(self.createParticipantBtn)
-        layout.addWidget(self.participantSelector)
-        layout.addWidget(self.toolSelector)
-        layout.addWidget(self.viewer)
-        
+        # Create main layout
+        main_layout = QHBoxLayout()
 
-        widget = QWidget()
-        widget.setLayout(layout)
-        self.setCentralWidget(widget)
+        # Create left column
+        left_column = QVBoxLayout()
+
+        # Create first container
+        container1 = QVBoxLayout()
+        container1.addWidget(self.loadBtn)
+        container1.addWidget(self.facility_id_input)
+
+        # Create second container
+        container2 = QVBoxLayout()
+        container2.addWidget(self.participantSelector)
+        container2.addWidget(self.createParticipantBtn)
+
+        # Create third container
+        container3 = QVBoxLayout()
+        container3.addWidget(self.toolSelector)
+
+        # Create fourth container
+        container4 = QVBoxLayout()
+        container4.addWidget(self.exportBtn)
+
+        # Add all containers to the left column
+        left_column.addLayout(container1)
+        left_column.addLayout(container2)
+        left_column.addLayout(container3)
+        left_column.addLayout(container4)
+
+        # Make left column a fixed width
+        left_column.setAlignment(Qt.AlignmentFlag.AlignTop)
+        left_column.setSpacing(10)
+
+        # Create a widget to contain the left column and set its maximum and minimum width
+        left_widget = QWidget()
+        left_widget.setLayout(left_column)
+        left_widget.setFixedWidth(200)
+
+        # Add left column and right column to the main layout
+        main_layout.addWidget(left_widget)
+        main_layout.addWidget(self.viewer)
+
+        # Create a widget to set as the central widget
+        central_widget = QWidget()
+        central_widget.setLayout(main_layout)
+        self.setCentralWidget(central_widget)
 
     def loadImage(self):
         filename, _ = QFileDialog.getOpenFileName(self, "Load Image", "", "Image Files (*.png *.jpg *.bmp)")
