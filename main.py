@@ -48,13 +48,7 @@ class Point(QObject):
         label.setPos(x+5, y+5)
         self.scene.addItem(label)
 
-
         self.marker = ellipse
-    
-    # Remove marker from scene when object is deleted
-    def __delattr__(self, __name: str) -> None:
-        self.marker.scene().removeItem(self.marker)
-        super().__delattr__(__name)
 
 class TrueLandmark(Point):
     def __init__(self, x: float, y: float, id: str, scene: QGraphicsScene):
@@ -67,7 +61,7 @@ class ReferenceLandmark(Point):
         self.ref_y = ref_y
 
         # Draw an arrow pointing from the origin to the reference landmark
-        line = QGraphicsLineItem(x, y, ref_x, ref_y)
+        line = QGraphicsLineItem(x, y, ref_x, ref_y, self.marker)
         line.setPen(QPen(QColor('black')))
         line.setZValue(-1)
         self.scene.addItem(line)
@@ -79,12 +73,6 @@ class ReferenceLandmark(Point):
         arrow.setBrush(QBrush(QColor('black')))
         arrow.setZValue(-1)
         self.arrow = arrow
-
-    # Remove arrow from scene when object is deleted
-    def __delattr__(self, __name: str) -> None:
-        self.line.scene().removeItem(self.line)
-        self.arrow.scene().removeItem(self.arrow)
-        super().__delattr__(__name)
 
     def create_arrow_head(self, x, y, ref_x, ref_y):
         line = QLineF(x, y, ref_x, ref_y)
@@ -110,7 +98,7 @@ class EstimatedPoint(Point):
         self.true_y = true_y
 
         # Create line between true and estimated landmark
-        line = QGraphicsLineItem(x, y, true_x, true_y)
+        line = QGraphicsLineItem(x, y, true_x, true_y, self.marker)
         line.setPen(QPen(QColor('black')))
         line.setFlag(QGraphicsLineItem.GraphicsItemFlag.ItemIsSelectable, True)
         line.setZValue(-1)
@@ -170,6 +158,7 @@ class ReferenceMarkingTool(Tool):
         super().__init__(viewer)
         self.firstPoint = None
         self.tempMarker = None
+        self.signalEmitter = SignalHolder()
 
 
     def mousePressEvent(self, event):
@@ -189,7 +178,8 @@ class ReferenceMarkingTool(Tool):
             point = self.viewer.mapToScene(event.pos())
             id, ok = QInputDialog.getText(self.viewer, 'Reference Landmark', 'Enter ID for reference landmark')
             if ok:
-                ReferenceLandmark(self.firstPoint.x(), self.firstPoint.y(), id, self.viewer.scene(), point.x(), point.y())
+                ref_landmark = ReferenceLandmark(self.firstPoint.x(), self.firstPoint.y(), id, self.viewer.scene(), point.x(), point.y())
+                self.signalEmitter.signal.emit(ref_landmark)
 
             # Remove temporary marker
             self.viewer.scene().removeItem(self.tempMarker)
@@ -243,11 +233,11 @@ class EstimatedPointTool(Tool):
             self.signalEmitter.signal.emit(estimated_point)
 
 class DeleteTool(Tool):
-    # This doesn't work because the item detected is the ellipse and not the point
     def __init__(self, viewer):
         super().__init__(viewer)
         self.signalEmitter = SignalHolder()
 
+    # Detect the item that is clicked on and emit it to the MainWindow
     def mousePressEvent(self, event):
         point = self.viewer.mapToScene(event.pos())
         item = self.viewer.scene().itemAt(point, QTransform())
@@ -256,7 +246,6 @@ class DeleteTool(Tool):
             if isinstance(item, QGraphicsEllipseItem):
                 self.signalEmitter.signal.emit(item)
 
-                # CONTINUE: Remove the item from the appropriate list in the main window
 
 class ImageViewer(QGraphicsView):
     def __init__(self, parent=None):
@@ -304,6 +293,7 @@ class MainWindow(QMainWindow):
         self.true_landmarks = []
         self.estimated_landmarks = []
         self.estimated_edges = []
+        self.reference_point = None
 
         # Marking tools
         self.toolSelector = QComboBox()
@@ -324,8 +314,9 @@ class MainWindow(QMainWindow):
         self.loadBtn.clicked.connect(self.loadImage)
         self.createParticipantBtn.clicked.connect(self.createParticipant)
         self.toolSelector.currentTextChanged.connect(self.onToolSelectionChanged)
-        self.trueLandmarkTool.signalEmitter.signal.connect(self.handle_true_landmark_created)
-        self.estimatedPointTool.signalEmitter.signal.connect(self.handle_estimated_point_created)
+        self.trueLandmarkTool.signalEmitter.signal.connect(self.handle_point_created)
+        self.estimatedPointTool.signalEmitter.signal.connect(self.handle_point_created)
+        self.referenceTool.signalEmitter.signal.connect(self.handle_point_created)
         self.deleteTool.signalEmitter.signal.connect(self.handle_item_deleted)
 
         # Set up UI
@@ -372,26 +363,49 @@ class MainWindow(QMainWindow):
         elif text == 'Delete':
             self.viewer.setTool(self.deleteTool)
 
-    # Catch the true landmark creation event
-    def handle_true_landmark_created(self, true_landmark):
-        # Add the TrueLandmark object to the list
-        self.true_landmarks.append(true_landmark)
 
-    # Catch the estimated point creation event
-    def handle_estimated_point_created(self, estimated_point):
-        if isinstance(estimated_point, EstimatedLandmark):
+    # Catch the point creation event
+    def handle_point_created(self, point):
+        if isinstance(point, EstimatedLandmark):
             self.estimated_landmarks.append(estimated_point)
-        elif isinstance(estimated_point, EdgePoint):
+        elif isinstance(point, EdgePoint):
             self.estimated_edges.append(estimated_point)
-            print("Edge point created")
+        elif isinstance(point, ReferenceLandmark):
+            if self.reference_point:
+                 # Remove the old reference point
+                self.handle_item_deleted(self.reference_point.marker)
+
+            self.reference_point = point
+        elif isinstance(point, TrueLandmark):
+            self.true_landmarks.append(point)
 
     # Catch the item deletion event
     def handle_item_deleted(self, item):
         # Find the point to which the item belongs and remove it
         for true_landmark in self.true_landmarks:
-            if item in true_landmark.markers:
-                true_landmark.items.remove(item)
-                return
+            if item == true_landmark.marker:
+                # Remove the true_landmark from the list
+                self.true_landmarks.remove(true_landmark)
+                item.scene().removeItem(item)
+                break
+
+        for estimated_landmark in self.estimated_landmarks:
+            if item == estimated_landmark.marker:
+                # Remove the estimated_landmark from the list
+                self.estimated_landmarks.remove(estimated_landmark)
+                item.scene().removeItem(item)
+                break
+
+        for estimated_edge in self.estimated_edges:
+            if item == estimated_edge.marker:
+                # Remove the estimated_edge from the list
+                self.estimated_edges.remove(estimated_edge)
+                item.scene().removeItem(item)
+                break
+                
+        if item == self.reference_point.marker:
+            self.reference_point = None
+            item.scene().removeItem(item)
         
 
 
