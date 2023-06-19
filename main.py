@@ -1,23 +1,25 @@
 # TODO:
 # 0. Set scale
-# 1. Set reference landmark
-# 2. Orient reference landmark
-# 3. Set true landmark
-# 4. Give id to true landmark
-# 5. Create a participant with a given id
-# 6. Select participant from list
-# 7. Set estimated landmark
-# 8. Give id to estimated landmark
-# 9. Select corresponding true landmark for estimated landmark
+# + 1. Set reference landmark
+# + 2. Orient reference landmark
+# + 3. Set true landmark
+# + 4. Give id to true landmark
+# + 5. Create a participant with a given id
+# + 6. Select participant from list
+# + 7. Set estimated landmark
+# + 8. Give id to estimated landmark
+# + 9. Select corresponding true landmark for estimated landmark
 # 10. Calculate distance between estimated landmark and true landmark
 # 12. Calculate angle between reference landmark and true landmark
 # 13. Calculate angle between reference landmark and estimated landmark
-# 14. Set edge point
-# 15. Select corresponding true landmark for edge point
+# + 14. Set edge point
+# + 15. Select corresponding true landmark for edge point
 # 16. Calculate distance between edge point and true landmark
 # 17. Set ID for image
 # 18. Save information to file
+# 19. Make the UI look nice
 
+# CONTINUE: do the calculation tool and export
 
 from PyQt6.QtWidgets import QDialog, QLabel, QLineEdit, QGraphicsTextItem
 from PyQt6.QtWidgets import QApplication, QGraphicsView, QGraphicsScene, QMainWindow, QPushButton, QVBoxLayout, QWidget, QFileDialog, QGraphicsEllipseItem, QGraphicsLineItem, QComboBox, QInputDialog, QGraphicsPolygonItem
@@ -26,107 +28,8 @@ from PyQt6.QtCore import Qt, QRectF, QPointF, QLineF, pyqtSignal, QObject
 from abc import ABC, abstractmethod
 from math import cos, sin, pi
 import copy
-
-class Point(QObject):
-    def __init__(self, x: float, y: float, color: str, id: str, scene: QGraphicsScene):
-        self.x = x
-        self.y = y
-        self.id = id
-        self.scene = scene
-
-        # Create visual marker
-        ellipse = QGraphicsEllipseItem(x-5, y-5, 10, 10)
-        ellipse.setBrush(QBrush(QColor(color)))
-        ellipse.setPen(QPen(QColor(color)))
-        ellipse.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable, True)
-        self.scene.addItem(ellipse)
-
-        # Create label
-        label = QGraphicsTextItem(id, ellipse)
-        label.setDefaultTextColor(QColor('black'))
-        label.setFont(QFont('Arial', 10))
-        label.setPos(x+5, y+5)
-        self.scene.addItem(label)
-
-        self.marker = ellipse
-
-class TrueLandmark(Point):
-    def __init__(self, x: float, y: float, id: str, scene: QGraphicsScene):
-        super().__init__(x, y, '#77dd77', id, scene)
-
-class ReferenceLandmark(Point):
-    def __init__(self, x: float, y: float, id: str, scene: QGraphicsScene, ref_x: float, ref_y: float):
-        super().__init__(x, y, '#a1caf1', id, scene)
-        self.ref_x = ref_x
-        self.ref_y = ref_y
-
-        # Draw an arrow pointing from the origin to the reference landmark
-        line = QGraphicsLineItem(x, y, ref_x, ref_y, self.marker)
-        line.setPen(QPen(QColor('black')))
-        line.setZValue(-1)
-        self.scene.addItem(line)
-        self.line = line
-
-        # Draw the arrow head
-        arrow_head = self.create_arrow_head(x, y, ref_x, ref_y)
-        arrow = QGraphicsPolygonItem(arrow_head, line)
-        arrow.setBrush(QBrush(QColor('black')))
-        arrow.setZValue(-1)
-        self.arrow = arrow
-
-    def create_arrow_head(self, x, y, ref_x, ref_y):
-        line = QLineF(x, y, ref_x, ref_y)
-        angle = line.angle()  # Get the angle of the line
-        arrow_size = 10  # Set the size of the arrow head
-
-        # Calculate the points of the arrow head
-        p1 = QPointF(ref_x, ref_y)
-        p2 = QPointF(ref_x + arrow_size * cos((angle + 150) * pi / 180),
-                    ref_y - arrow_size * sin((angle + 150) * pi / 180))  # Flip y-coordinate
-        p3 = QPointF(ref_x + arrow_size * cos((angle - 150) * pi / 180),
-                    ref_y - arrow_size * sin((angle - 150) * pi / 180))  # Flip y-coordinate
-
-        # Create a QPolygonF from the points
-        arrow_head = QPolygonF([p1, p2, p3])
-
-        return arrow_head   
-
-class EstimatedPoint(Point):
-    def __init__(self, x: float, y: float, color: str, id: str, scene: QGraphicsScene, true_x: float, true_y: float, participant: str):
-        super().__init__(x, y, color, id, scene)
-        self.true_x = true_x
-        self.true_y = true_y
-
-        # Create line between true and estimated landmark
-        line = QGraphicsLineItem(x, y, true_x, true_y, self.marker)
-        line.setPen(QPen(QColor('black')))
-        line.setFlag(QGraphicsLineItem.GraphicsItemFlag.ItemIsSelectable, True)
-        line.setZValue(-1)
-        self.scene.addItem(line)
-
-        self.line = line
-
-        self.participant = participant
-
-    
-    # Remove line from scene when object is deleted
-    def __delattr__(self, __name: str) -> None:
-        self.line.scene().removeItem(self.line)
-        super().__delattr__(__name)
-
-    # Calculate euclidean error between true and estimated landmark
-    def getError(self):
-        return (self.x - self.true_x)**2 + (self.y - self.true_y)**2
-    
-class EstimatedLandmark(EstimatedPoint):
-    def __init__(self, x: float, y: float, id: str, scene: QGraphicsScene, true_x: float, true_y: float, participant: str):
-        super().__init__(x, y, '#fd7c6e',id, scene, true_x, true_y, participant)
-
-class EdgePoint(EstimatedPoint):
-    def __init__(self, x: float, y: float, id: str, scene: QGraphicsScene, true_x: float, true_y: float, participant: str):
-        super().__init__(x, y, '#b39eb5', id, scene, true_x, true_y, participant)
-
-
+from tools import ReferenceMarkingTool, TrueLandmarkTool, EstimatedLandmarkTool, DeleteTool, SetScaleTool
+from points import ReferenceLandmark, TrueLandmark, EstimatedLandmark, EdgePoint
 
 class Participant():
     def __init__(self, id: str):
@@ -140,111 +43,6 @@ class Participant():
         self.estimates.remove(estimate)
         del estimate
 
-
-
-class SignalHolder(QObject):
-    signal = pyqtSignal(object)
-
-class Tool(ABC):
-    def __init__(self, viewer):
-        self.viewer = viewer
-
-    @abstractmethod
-    def mousePressEvent(self, event):
-        pass
-
-class ReferenceMarkingTool(Tool):
-    def __init__(self, viewer):
-        super().__init__(viewer)
-        self.firstPoint = None
-        self.tempMarker = None
-        self.signalEmitter = SignalHolder()
-
-
-    def mousePressEvent(self, event):
-        # Select a the position of a reference landmark if
-        if self.firstPoint is None:
-            # Set first point
-            self.firstPoint = self.viewer.mapToScene(event.pos())
-            # Create a temporary marker
-            ellipse = QGraphicsEllipseItem(self.firstPoint.x()-5, self.firstPoint.y()-5, 10, 10)
-            ellipse.setBrush(QBrush(QColor('#a1caf1')))
-            ellipse.setPen(QPen(QColor('#a1caf1')))
-            self.viewer.scene().addItem(ellipse)
-            self.tempMarker = ellipse
-        
-        # Select the orientation of the reference landmark
-        else:
-            point = self.viewer.mapToScene(event.pos())
-            id, ok = QInputDialog.getText(self.viewer, 'Reference Landmark', 'Enter ID for reference landmark')
-            if ok:
-                ref_landmark = ReferenceLandmark(self.firstPoint.x(), self.firstPoint.y(), id, self.viewer.scene(), point.x(), point.y())
-                self.signalEmitter.signal.emit(ref_landmark)
-
-            # Remove temporary marker
-            self.viewer.scene().removeItem(self.tempMarker)
-            self.tempMarker = None
-            self.firstPoint = None
-
-class TrueLandmarkTool(Tool):
-
-    def __init__(self, viewer):
-        super().__init__(viewer)
-        self.signalEmitter = SignalHolder()
-
-    def mousePressEvent(self, event):
-        point = self.viewer.mapToScene(event.pos())
-        id, ok = QInputDialog.getText(self.viewer, 'True Landmark', 'Enter ID for true landmark')
-        if ok:
-            true_landmark = TrueLandmark(point.x(), point.y(), id, self.viewer.scene())
-            self.signalEmitter.signal.emit(true_landmark)
-
-class EstimatedPointTool(Tool):
-    def __init__(self, viewer, true_landmarks, participantSelector):
-        super().__init__(viewer)
-        self.true_landmarks = true_landmarks
-        self.participantSelector = participantSelector
-        self.signalEmitter = SignalHolder()
-
-
-    def mousePressEvent(self, event):
-        # Position of the estimation
-        point = self.viewer.mapToScene(event.pos())
-
-        # True landmark which is estimated
-        # Get the ids of the true landmarks
-        true_landmark_ids = [true_landmark.id for true_landmark in self.true_landmarks]
-        dialog = ReferenceDialog(true_landmark_ids)
-        
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            # Get the data
-            estimation_id, estimation_type, true_landmark_id = dialog.get_data()
-            # Get the position of the true landmark
-            true_x, true_y = [(true_landmark.x, true_landmark.y) for true_landmark in self.true_landmarks if true_landmark.id == true_landmark_id][0]
-            # Current participant
-            current_participant = self.participantSelector.currentText()
-
-            # Create the estimated landmark or edge point
-            if estimation_type == "Landmark":
-                estimated_point = EstimatedLandmark(point.x(), point.y(), estimation_id, self.viewer.scene(), true_x, true_y, current_participant)
-            elif estimation_type == "Edge":
-                estimated_point = EdgePoint(point.x(), point.y(), estimation_id, self.viewer.scene(), true_x, true_y, current_participant)
-            # Emit the point to be picked up by the MainWindow
-            self.signalEmitter.signal.emit(estimated_point)
-
-class DeleteTool(Tool):
-    def __init__(self, viewer):
-        super().__init__(viewer)
-        self.signalEmitter = SignalHolder()
-
-    # Detect the item that is clicked on and emit it to the MainWindow
-    def mousePressEvent(self, event):
-        point = self.viewer.mapToScene(event.pos())
-        item = self.viewer.scene().itemAt(point, QTransform())
-        if item:
-            print(type(item))
-            if isinstance(item, QGraphicsEllipseItem):
-                self.signalEmitter.signal.emit(item)
 
 
 class ImageViewer(QGraphicsView):
@@ -294,18 +92,21 @@ class MainWindow(QMainWindow):
         self.estimated_landmarks = []
         self.estimated_edges = []
         self.reference_point = None
+        self.scale_value = None
 
-        # Marking tools
+        # Tools
         self.toolSelector = QComboBox()
         self.toolSelector.addItem('None')
         self.referenceTool = ReferenceMarkingTool(self.viewer)
         self.toolSelector.addItem('Set Reference')
         self.trueLandmarkTool = TrueLandmarkTool(self.viewer)
         self.toolSelector.addItem('True Landmark')
-        self.estimatedPointTool = EstimatedPointTool(self.viewer, self.true_landmarks, self.participantSelector)
+        self.estimatedLandmarkTool = EstimatedLandmarkTool(self.viewer, self.true_landmarks, self.participantSelector)
         self.toolSelector.addItem('Estimate Point')
         self.deleteTool = DeleteTool(self.viewer)
         self.toolSelector.addItem('Delete')
+        self.scaleTool = SetScaleTool(self.viewer)
+        self.toolSelector.addItem('Set Scale')
 
         self.toolSelector.setCurrentIndex(0)
 
@@ -315,9 +116,10 @@ class MainWindow(QMainWindow):
         self.createParticipantBtn.clicked.connect(self.createParticipant)
         self.toolSelector.currentTextChanged.connect(self.onToolSelectionChanged)
         self.trueLandmarkTool.signalEmitter.signal.connect(self.handle_point_created)
-        self.estimatedPointTool.signalEmitter.signal.connect(self.handle_point_created)
+        self.estimatedLandmarkTool.signalEmitter.signal.connect(self.handle_point_created)
         self.referenceTool.signalEmitter.signal.connect(self.handle_point_created)
         self.deleteTool.signalEmitter.signal.connect(self.handle_item_deleted)
+        self.scaleTool.signalEmitter.signal.connect(self.handle_scale_set)
 
         # Set up UI
         layout = QVBoxLayout()
@@ -359,22 +161,24 @@ class MainWindow(QMainWindow):
         elif text == 'True Landmark':
             self.viewer.setTool(self.trueLandmarkTool)
         elif text == 'Estimate Point':
-            self.viewer.setTool(self.estimatedPointTool)
+            self.viewer.setTool(self.estimatedLandmarkTool)
         elif text == 'Delete':
             self.viewer.setTool(self.deleteTool)
-
+        elif text == 'Set Scale':
+            self.viewer.setTool(self.scaleTool)
 
     # Catch the point creation event
     def handle_point_created(self, point):
+        participant = self.getCurrentParticipant()
+
         if isinstance(point, EstimatedLandmark):
-            self.estimated_landmarks.append(estimated_point)
+            participant.addEstimate(point)
         elif isinstance(point, EdgePoint):
-            self.estimated_edges.append(estimated_point)
+            participant.addEstimate(point)
         elif isinstance(point, ReferenceLandmark):
             if self.reference_point:
                  # Remove the old reference point
                 self.handle_item_deleted(self.reference_point.marker)
-
             self.reference_point = point
         elif isinstance(point, TrueLandmark):
             self.true_landmarks.append(point)
@@ -389,69 +193,31 @@ class MainWindow(QMainWindow):
                 item.scene().removeItem(item)
                 break
 
-        for estimated_landmark in self.estimated_landmarks:
-            if item == estimated_landmark.marker:
-                # Remove the estimated_landmark from the list
-                self.estimated_landmarks.remove(estimated_landmark)
-                item.scene().removeItem(item)
-                break
-
-        for estimated_edge in self.estimated_edges:
-            if item == estimated_edge.marker:
-                # Remove the estimated_edge from the list
-                self.estimated_edges.remove(estimated_edge)
-                item.scene().removeItem(item)
-                break
-                
-        if item == self.reference_point.marker:
+        if self.reference_point and item == self.reference_point.marker:
             self.reference_point = None
             item.scene().removeItem(item)
-        
 
+        # Loop through all participants and look for the item
+        for participant in self.participants:
+            for estimate in participant.estimates:
+                if item == estimate.marker:
+                    # Remove the estimate from the participant
+                    participant.removeEstimate(estimate)
+                    item.scene().removeItem(item)
+                    break
+ 
+    # Catch the scale set event
+    def handle_scale_set(self, scale):
+        self.scale_value = scale
 
+    def calculateError(self):
+        # Calculate the error for each participant
+        for participant in self.participants:
+            participant.calculateError(self.reference_point, self.scale_value)
 
-# Dialog for creating an estimation
-
-class ReferenceDialog(QDialog):
-    def __init__(self, reference_landmarks):
-        super().__init__()
-
-        # Set up the dialog layout
-        layout = QVBoxLayout()
-
-        # Add a label and line edit for entering the ID
-        id_label = QLabel("Enter ID:")
-        self.id_edit = QLineEdit()
-        layout.addWidget(id_label)
-        layout.addWidget(self.id_edit)
-
-        # Add a combo box for selecting the type of reference
-        type_label = QLabel("Select reference type:")
-        self.type_combo = QComboBox()
-        self.type_combo.addItem("Landmark")
-        self.type_combo.addItem("Edge")
-        layout.addWidget(type_label)
-        layout.addWidget(self.type_combo)
-
-        # Add a combo box for selecting the reference landmark
-        landmark_label = QLabel("Select reference landmark:")
-        self.landmark_combo = QComboBox()
-        self.landmark_combo.addItems(reference_landmarks)
-        layout.addWidget(landmark_label)
-        layout.addWidget(self.landmark_combo)
-
-        # Add a button to accept the dialog
-        accept_button = QPushButton("OK")
-        accept_button.clicked.connect(self.accept)
-        layout.addWidget(accept_button)
-
-        # Set the dialog layout
-        self.setLayout(layout)
-
-    def get_data(self):
-        # Return the entered ID, reference type, and reference landmark/edge
-        return self.id_edit.text(), self.type_combo.currentText(), self.landmark_combo.currentText()
-
+    # Save the data to a file
+    def saveData(self):
+        pass
         
 if __name__ == '__main__':
     import sys
